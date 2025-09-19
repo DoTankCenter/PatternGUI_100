@@ -4,6 +4,8 @@
 
 A reverse-engineered Python toolkit for interpreting, visualizing, and editing sewing patterns from Mitsubishi PLK-A0804F controllers.
 
+All cread to https://github.com/EmbroidePy/pyembroidery for their code on .100 files.
+
 ## 🚨 IMPORTANT DISCLAIMER
 
 **This parser is based on reverse-engineering and contains known issues:**
