@@ -3,7 +3,8 @@
     "allow": [
       "Bash(xxd:*)",
       "Bash(python:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []

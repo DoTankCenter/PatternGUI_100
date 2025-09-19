@@ -452,6 +452,136 @@ class Mitsubishi100Parser:
             y = int(start_y + t * dy)
             self.add_stitch(x, y)
 
+    def generate_qr_code(self, text: str, center_x: int = 0, center_y: int = 0,
+                         module_size: int = 8, stitch_spacing: float = 10.0,
+                         error_correction: str = 'M'):
+        """Generate a real QR code pattern using the qrcode library.
+
+        Args:
+            text: Text to encode
+            center_x, center_y: Center position for the QR code
+            module_size: Size of each module in stitching units
+            stitch_spacing: Spacing between stitches within modules
+            error_correction: Error correction level ('L', 'M', 'Q', 'H')
+
+        Returns:
+            Tuple of (success: bool, info: str, data_capacity: int)
+        """
+        try:
+            import qrcode
+            from qrcode.constants import ERROR_CORRECT_L, ERROR_CORRECT_M, ERROR_CORRECT_Q, ERROR_CORRECT_H
+
+            # Map error correction levels
+            error_levels = {
+                'L': ERROR_CORRECT_L,  # ~7% correction
+                'M': ERROR_CORRECT_M,  # ~15% correction
+                'Q': ERROR_CORRECT_Q,  # ~25% correction
+                'H': ERROR_CORRECT_H   # ~30% correction
+            }
+
+            error_level = error_levels.get(error_correction.upper(), ERROR_CORRECT_M)
+
+            # Calculate maximum size that fits in stitch area (20x20mm = 200x200 units)
+            max_total_size = 180  # Leave some margin
+            max_modules = max_total_size // module_size
+
+            # Try different QR versions to find the best fit
+            qr = None
+            version_used = None
+
+            for version in range(1, 11):  # QR versions 1-10
+                test_qr = qrcode.QRCode(
+                    version=version,
+                    error_correction=error_level,
+                    box_size=1,
+                    border=4
+                )
+                test_qr.add_data(text)
+
+                try:
+                    test_qr.make(fit=False)  # Don't auto-fit, use specified version
+                    qr_size = test_qr.modules_count
+
+                    if qr_size <= max_modules:
+                        qr = test_qr
+                        version_used = version
+                    else:
+                        break  # This version is too big, previous one was the largest that fits
+
+                except qrcode.exceptions.DataOverflowError:
+                    break  # Text too long for this version
+
+            if qr is None:
+                # Text too long, try with auto-fit on smallest possible version
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=error_level,
+                    box_size=1,
+                    border=4
+                )
+                qr.add_data(text)
+                qr.make(fit=True)
+                version_used = qr.version
+
+                if qr.modules_count > max_modules:
+                    return (False, f"QR code too large: {qr.modules_count}x{qr.modules_count} modules, max {max_modules}x{max_modules}", 0)
+
+            # Get the QR code matrix
+            matrix = qr.get_matrix()
+            qr_size = len(matrix)
+
+            # Calculate positioning
+            total_size = qr_size * module_size
+            start_x = center_x - total_size // 2
+            start_y = center_y - total_size // 2
+
+            # Check if it fits in stitch area
+            half_size = total_size // 2
+            if abs(center_x + half_size) > 100 or abs(center_x - half_size) > 100 or \
+               abs(center_y + half_size) > 100 or abs(center_y - half_size) > 100:
+                return (False, f"QR code extends beyond 20x20mm stitch area", 0)
+
+            # Generate stitches for black modules
+            modules_stitched = 0
+            for i, row in enumerate(matrix):
+                for j, is_black in enumerate(row):
+                    if is_black:
+                        module_center_x = start_x + j * module_size + module_size // 2
+                        module_center_y = start_y + i * module_size + module_size // 2
+
+                        # Add a small rectangle of stitches for each black module
+                        self.add_rectangle_stitches(module_center_x, module_center_y,
+                                                   max(4, module_size - 2), max(4, module_size - 2),
+                                                   stitch_spacing)
+                        modules_stitched += 1
+
+            # Calculate data capacity for this QR version and error correction level
+            capacity_map = {
+                # Version: {L: numeric, M: numeric, Q: numeric, H: numeric} (approximate alphanumeric capacity is ~60% of numeric)
+                1: {'L': 41, 'M': 34, 'Q': 27, 'H': 17},
+                2: {'L': 77, 'M': 63, 'Q': 48, 'H': 34},
+                3: {'L': 127, 'M': 101, 'Q': 77, 'H': 58},
+                4: {'L': 187, 'M': 149, 'Q': 111, 'H': 82},
+                5: {'L': 255, 'M': 202, 'Q': 144, 'H': 106},
+                6: {'L': 322, 'M': 255, 'Q': 178, 'H': 139},
+                7: {'L': 370, 'M': 293, 'Q': 207, 'H': 154},
+                8: {'L': 461, 'M': 365, 'Q': 259, 'H': 202},
+                9: {'L': 552, 'M': 432, 'Q': 312, 'H': 235},
+                10: {'L': 652, 'M': 513, 'Q': 364, 'H': 288}
+            }
+
+            # Estimate alphanumeric capacity (roughly 60% of numeric)
+            numeric_capacity = capacity_map.get(version_used, {}).get(error_correction.upper(), 0)
+            alphanumeric_capacity = int(numeric_capacity * 0.6)
+
+            info = f"QR Code v{version_used} ({qr_size}x{qr_size}), {modules_stitched} modules, ~{alphanumeric_capacity} chars capacity"
+            return (True, info, alphanumeric_capacity)
+
+        except ImportError:
+            return (False, "qrcode library not available", 0)
+        except Exception as e:
+            return (False, f"Error generating QR code: {e}", 0)
+
     def generate_simple_qr_pattern(self, text: str, center_x: int = 0, center_y: int = 0,
                                   module_size: int = 8, stitch_spacing: float = 10.0):
         """Generate a simple QR-like pattern using text hash."""

@@ -1280,21 +1280,21 @@ class Pattern100ViewerGUI:
         start_x_entry.focus()
 
     def add_qr_pattern_dialog(self):
-        """Show dialog to generate a simple QR-like pattern."""
+        """Show dialog to generate a real QR code pattern."""
         dialog = tk.Toplevel(self.root)
-        dialog.title("Generate QR Pattern")
-        dialog.geometry("400x300")
+        dialog.title("Generate QR Code")
+        dialog.geometry("450x400")
         dialog.transient(self.root)
         dialog.grab_set()
 
-        ttk.Label(dialog, text="QR Pattern Generator:").pack(pady=5)
+        ttk.Label(dialog, text="QR Code Generator:", font=("Arial", 10, "bold")).pack(pady=5)
 
         # Text input
         text_frame = ttk.LabelFrame(dialog, text="Text to Encode")
         text_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        text_var = tk.StringVar(value="Hello")
-        text_entry = ttk.Entry(text_frame, textvariable=text_var, width=30)
+        text_var = tk.StringVar(value="Hello World")
+        text_entry = ttk.Entry(text_frame, textvariable=text_var, width=35)
         text_entry.pack(pady=5)
 
         # Position
@@ -1314,30 +1314,87 @@ class Pattern100ViewerGUI:
         pos_y_entry = ttk.Entry(pos_coord_frame, textvariable=pos_y_var, width=10)
         pos_y_entry.grid(row=0, column=3, padx=5)
 
-        # Size settings
-        size_frame = ttk.LabelFrame(dialog, text="Pattern Size")
-        size_frame.pack(fill=tk.X, padx=10, pady=5)
+        # QR Settings
+        qr_frame = ttk.LabelFrame(dialog, text="QR Code Settings")
+        qr_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        size_coord_frame = ttk.Frame(size_frame)
-        size_coord_frame.pack(pady=5)
+        qr_settings_frame = ttk.Frame(qr_frame)
+        qr_settings_frame.pack(pady=5)
 
-        ttk.Label(size_coord_frame, text="Module Size:").grid(row=0, column=0, padx=5)
-        module_var = tk.StringVar(value="12")
-        module_entry = ttk.Entry(size_coord_frame, textvariable=module_var, width=8)
+        ttk.Label(qr_settings_frame, text="Module Size:").grid(row=0, column=0, padx=5)
+        module_var = tk.StringVar(value="8")
+        module_entry = ttk.Entry(qr_settings_frame, textvariable=module_var, width=8)
         module_entry.grid(row=0, column=1, padx=5)
 
-        ttk.Label(size_coord_frame, text="Stitch Spacing:").grid(row=0, column=2, padx=5)
+        ttk.Label(qr_settings_frame, text="Stitch Spacing:").grid(row=0, column=2, padx=5)
         stitch_var = tk.StringVar(value="8")
-        stitch_entry = ttk.Entry(size_coord_frame, textvariable=stitch_var, width=8)
+        stitch_entry = ttk.Entry(qr_settings_frame, textvariable=stitch_var, width=8)
         stitch_entry.grid(row=0, column=3, padx=5)
 
-        # Info
-        info_text = tk.Text(dialog, height=3, width=45, font=("Arial", 8))
-        info_text.pack(pady=5)
-        info_text.insert(tk.END, "Creates a simple hash-based pattern (not a real QR code).\n")
-        info_text.insert(tk.END, "Pattern will be 10×10 modules with border.\n")
-        info_text.insert(tk.END, "Each filled module becomes a small rectangle of stitches.")
+        # Error correction level
+        error_frame = ttk.Frame(qr_frame)
+        error_frame.pack(pady=5)
+
+        ttk.Label(error_frame, text="Error Correction:").pack(side=tk.LEFT, padx=5)
+        error_var = tk.StringVar(value="M")
+        error_combo = ttk.Combobox(error_frame, textvariable=error_var, values=['L', 'M', 'Q', 'H'],
+                                  width=5, state="readonly")
+        error_combo.pack(side=tk.LEFT, padx=5)
+        ttk.Label(error_frame, text="(L=Low, M=Medium, Q=Quartile, H=High)", font=("Arial", 8)).pack(side=tk.LEFT, padx=5)
+
+        # Info display
+        info_frame = ttk.LabelFrame(dialog, text="QR Code Information")
+        info_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        info_text = tk.Text(info_frame, height=4, width=50, font=("Arial", 8), wrap=tk.WORD)
+        info_text.pack(pady=5, fill=tk.BOTH, expand=True)
+        info_text.insert(tk.END, "Enter text above and click 'Preview' to see QR code capacity.\n\n")
+        info_text.insert(tk.END, "Real QR codes can store much more data than simple patterns:\n")
+        info_text.insert(tk.END, "• Version 1 (21×21): ~25 alphanumeric chars\n")
+        info_text.insert(tk.END, "• Version 2 (25×25): ~47 alphanumeric chars\n")
+        info_text.insert(tk.END, "• Higher versions store more data but may be too large for 20×20mm area.")
         info_text.config(state=tk.DISABLED)
+
+        def preview_qr():
+            """Preview QR code capacity without generating stitches."""
+            try:
+                text = text_var.get().strip()
+                if not text:
+                    messagebox.showwarning("Warning", "Please enter text to encode")
+                    return
+
+                module_size = int(module_var.get())
+                error_correction = error_var.get()
+
+                # Create temporary parser to test QR generation
+                temp_parser = Mitsubishi100Parser()
+                temp_parser.create_new_pattern()
+
+                success, info, capacity = temp_parser.generate_qr_code(
+                    text, 0, 0, module_size, 8.0, error_correction)
+
+                info_text.config(state=tk.NORMAL)
+                info_text.delete(1.0, tk.END)
+
+                if success:
+                    info_text.insert(tk.END, f"✓ QR Code Preview:\n{info}\n\n")
+                    info_text.insert(tk.END, f"Text: '{text}' ({len(text)} characters)\n")
+                    info_text.insert(tk.END, f"Capacity: ~{capacity} alphanumeric characters\n")
+                    if len(text) <= capacity:
+                        info_text.insert(tk.END, "✓ Text fits in QR code\n")
+                    else:
+                        info_text.insert(tk.END, f"⚠ Text too long! Reduce by {len(text) - capacity} characters\n")
+                else:
+                    info_text.insert(tk.END, f"✗ Error: {info}\n\n")
+                    info_text.insert(tk.END, "Try:\n")
+                    info_text.insert(tk.END, "• Shorter text\n")
+                    info_text.insert(tk.END, "• Smaller module size\n")
+                    info_text.insert(tk.END, "• Lower error correction level")
+
+                info_text.config(state=tk.DISABLED)
+
+            except ValueError:
+                messagebox.showerror("Error", "Please enter valid numbers")
 
         def generate_qr():
             try:
@@ -1350,42 +1407,43 @@ class Pattern100ViewerGUI:
                 center_y = int(pos_y_var.get())
                 module_size = int(module_var.get())
                 stitch_spacing = float(stitch_var.get())
+                error_correction = error_var.get()
 
-                # Calculate approximate pattern size
-                total_size = 10 * module_size  # 10x10 modules
-                min_x = center_x - total_size // 2
-                max_x = center_x + total_size // 2
-                min_y = center_y - total_size // 2
-                max_y = center_y + total_size // 2
+                success, info, capacity = self.parser.generate_qr_code(
+                    text, center_x, center_y, module_size, stitch_spacing, error_correction)
 
-                # Check if pattern fits in stitch area
-                if (self.is_within_stitch_area(min_x, min_y) and
-                    self.is_within_stitch_area(max_x, max_y)):
-
-                    actual_size = self.parser.generate_simple_qr_pattern(
-                        text, center_x, center_y, module_size, stitch_spacing)
-
+                if success:
                     self.pattern_commands = self.parser.commands
                     self.modified = True
                     self.update_display()
                     self.update_window_title()
-                    self.status_var.set(f"Generated QR pattern: '{text}' ({actual_size}×{actual_size} units)")
+                    self.status_var.set(f"Generated {info}")
                     dialog.destroy()
                 else:
-                    messagebox.showwarning("Outside Stitch Area",
-                                         f"QR pattern ({total_size}×{total_size} units) at ({center_x}, {center_y}) "
-                                         f"would exceed stitch area.\n\n"
-                                         f"Try smaller module size or different center position.")
+                    messagebox.showerror("QR Code Error", info)
 
             except ValueError:
                 messagebox.showerror("Error", "Please enter valid numbers")
 
+        # Update preview when text or settings change
+        def on_change(*args):
+            if len(text_var.get().strip()) > 0:
+                preview_qr()
+
+        text_var.trace('w', on_change)
+        module_var.trace('w', on_change)
+        error_var.trace('w', on_change)
+
         button_frame = ttk.Frame(dialog)
         button_frame.pack(pady=10)
-        ttk.Button(button_frame, text="Generate QR", command=generate_qr).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Preview", command=preview_qr).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Generate QR Code", command=generate_qr).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
 
         text_entry.focus()
+
+        # Initial preview
+        preview_qr()
 
     def on_command_type_changed(self):
         """Handle command type selection change."""
